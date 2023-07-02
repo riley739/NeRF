@@ -1,0 +1,13 @@
+[project]
+name = "my_method"
+version = "0.1.1"
+
+dependencies = [
+    "nerfstudio" 
+]
+
+[tool.setuptools.packages.find]
+include = ["my_method*"]
+
+[project.entry-points.'nerfstudio.method_configs']
+my-method = 'my_method.my_config:MyMethod'
