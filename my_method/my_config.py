@@ -8,13 +8,15 @@ from nerfstudio.engine.schedulers import (
     ExponentialDecaySchedulerConfig,
 )
 
+from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, VanillaDataManagerConfig
 from nerfstudio.data.dataparsers.nerfstudio_dataparser import NerfstudioDataParserConfig
 from nerfstudio.engine.optimizers import RAdamOptimizerConfig
 from nerfstudio.engine.trainer import TrainerConfig
 
 from my_method.my_dataManager import MyDataManagerConfig
 from my_method.my_nerf import MyModelConfig
-from my_method.my_pipeline import MyPipeline
+from my_method.my_pipeline import MyPipelineConfig
+from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
 
 MyMethod = MethodSpecification(
     config=TrainerConfig(
@@ -23,7 +25,7 @@ MyMethod = MethodSpecification(
 	    steps_per_save=2000,
 	    max_num_iterations=30000,
 	    mixed_precision=True,
-	    pipeline=MyPipeline(
+	    pipeline=MyPipelineConfig(
 	        datamanager=MyDataManagerConfig(
 	            dataparser=NerfstudioDataParserConfig(),
 	            train_num_rays_per_batch=1024,
@@ -35,15 +37,6 @@ MyMethod = MethodSpecification(
             ),
 			model=MyModelConfig(
             	eval_num_rays_per_chunk=1 << 15,
-				num_nerf_samples_per_ray=128,
-				num_proposal_samples_per_ray=(512, 256),
-				hidden_dim=128,
-				hidden_dim_color=128,
-				appearance_embed_dim=128,
-				base_res=32,
-				max_res=4096,
-				proposal_weights_anneal_max_num_iters=5000,
-				log2_hashmap_size=21,
 			),
 		),
 	    optimizers={

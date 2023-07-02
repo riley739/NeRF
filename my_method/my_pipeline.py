@@ -10,6 +10,7 @@ from nerfstudio.pipelines.base_pipeline import (
     VanillaPipeline,
     VanillaPipelineConfig,
 )
+from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, VanillaDataManagerConfig
 
 from my_method.my_dataManager import MyDataManagerConfig, MyDataManager
 from my_method.my_nerf import MyModelConfig, MyNeRFModel
@@ -20,7 +21,7 @@ class MyPipelineConfig(VanillaPipelineConfig):
 
     _target: Type = field(default_factory=lambda: MyPipeline)
     """target class to instantiate"""
-    datamanager: MyDataManagerConfig() = MyDataManagerConfig()
+    datamanager: MyDataManagerConfig = MyDataManagerConfig()
     """specifies the datamanager config"""
     model: MyModelConfig = MyModelConfig()
     """specifies the model config"""
