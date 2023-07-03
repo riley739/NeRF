@@ -384,6 +384,7 @@ class MyDataManager(DataManager, Generic[TDataset]):
         self.sampler = None
         self.test_mode = test_mode
         self.test_split = "test" if test_mode in ["test", "inference"] else "val"
+        print(type(self.config))
         self.dataparser_config = self.config.dataparser
         if self.config.data is not None:
             self.config.dataparser.data = Path(self.config.data)

@@ -1,6 +1,7 @@
 import typing
 from dataclasses import dataclass, field
-from typing import Literal, Type
+from typing import Literal, Type, Optional
+from nerfstudio.configs import base_config as cfg
 
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -14,9 +15,11 @@ from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, Va
 
 from my_method.my_dataManager import MyDataManagerConfig, MyDataManager
 from my_method.my_nerf import MyModelConfig, MyNeRFModel
+from torch.cuda.amp.grad_scaler import GradScaler
+
 
 @dataclass
-class MyPipelineConfig(VanillaPipelineConfig):
+class MyPipelineConfig(cfg.InstantiateConfig):
     """Configuration for pipeline instantiation"""
 
     _target: Type = field(default_factory=lambda: MyPipeline)
@@ -35,6 +38,7 @@ class MyPipeline(VanillaPipeline):
         test_mode: Literal["test", "val", "inference"] = "val",
         world_size: int = 1,
         local_rank: int = 0,
+        grad_scaler: Optional[GradScaler] = None,
     ):
         super(VanillaPipeline, self).__init__()
         self.config = config
@@ -45,6 +49,7 @@ class MyPipeline(VanillaPipeline):
             test_mode=test_mode,
             world_size=world_size,
             local_rank=local_rank,
+            
         )
         self.datamanager.to(device)
 
@@ -54,6 +59,8 @@ class MyPipeline(VanillaPipeline):
             scene_box=self.datamanager.train_dataset.scene_box,
             num_train_data=len(self.datamanager.train_dataset),
             metadata=self.datamanager.train_dataset.metadata,
+            device=device,
+            grad_scaler=grad_scaler,
         )
         self.model.to(device)
 
@@ -61,3 +68,4 @@ class MyPipeline(VanillaPipeline):
         if world_size > 1:
             self._model = typing.cast(MyNeRFModel, DDP(self._model, device_ids=[local_rank], find_unused_parameters=True))
             dist.barrier(device_ids=[local_rank])
+
