@@ -17,6 +17,8 @@ from my_method.my_dataManager import MyDataManagerConfig
 from my_method.my_nerf import MyModelConfig
 from my_method.my_pipeline import MyPipelineConfig
 from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
+from nerfstudio.models.vanilla_nerf import VanillaModelConfig
+
 
 MyMethod = MethodSpecification(
     config=TrainerConfig(
@@ -25,8 +27,8 @@ MyMethod = MethodSpecification(
 	    steps_per_save=2000,
 	    max_num_iterations=30000,
 	    mixed_precision=True,
-	    pipeline=MyPipelineConfig(
-	        datamanager=MyDataManagerConfig(
+	    pipeline=VanillaPipelineConfig(
+	        datamanager=VanillaDataManagerConfig(
 	            dataparser=NerfstudioDataParserConfig(),
 	            train_num_rays_per_batch=1024,
                 eval_num_rays_per_batch=1024,
