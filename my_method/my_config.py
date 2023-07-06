@@ -17,7 +17,7 @@ from my_method.my_dataManager import MyDataManagerConfig
 from my_method.my_nerf import MyModelConfig
 from my_method.my_pipeline import MyPipelineConfig
 from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
-
+from my_method.test_nerf import Nerfacto_testModelConfig
 
 MyMethod = MethodSpecification(
     config=TrainerConfig(
@@ -36,7 +36,7 @@ MyMethod = MethodSpecification(
 					optimizer=RAdamOptimizerConfig(lr=6e-4, eps=1e-8, weight_decay=1e-3),
 				),
             ),
-			model=MyModelConfig(
+			model=Nerfacto_testModelConfig(
             	eval_num_rays_per_chunk=1 << 15,
 			),
 		),
