@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple, Type
+import math
 
 import torch
 from torch.nn import Parameter
@@ -25,6 +26,13 @@ from nerfstudio.model_components.renderers import (
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps, colors, misc
 
+def light_model(images, depths):
+    A = 1
+    B = 1 
+
+    hazy = images*math.e**(-B*depths) + A*(1 - math.e**(-B*depths))
+
+    return hazy
 
 @dataclass
 class MyModelConfig(ModelConfig):
@@ -120,6 +128,8 @@ class MyNeRFModel(Model):
         accumulation_coarse = self.renderer_accumulation(weights_coarse)
         depth_coarse = self.renderer_depth(weights_coarse, ray_samples_uniform)
 
+        rgb_hazy_coarse = light_model(rgb_coarse, depth_coarse)
+
         # pdf sampling
         ray_samples_pdf = self.sampler_pdf(ray_bundle, ray_samples_uniform, weights_coarse)
 
@@ -133,6 +143,8 @@ class MyNeRFModel(Model):
         accumulation_fine = self.renderer_accumulation(weights_fine)
         depth_fine = self.renderer_depth(weights_fine, ray_samples_pdf)
 
+        rgb_hazy_fine = light_model(rgb_fine, depth_fine)
+
         outputs = {
             "rgb_coarse": rgb_coarse,
             "rgb_fine": rgb_fine,
@@ -140,7 +152,10 @@ class MyNeRFModel(Model):
             "accumulation_fine": accumulation_fine,
             "depth_coarse": depth_coarse,
             "depth_fine": depth_fine,
+            "hazy_coarse": rgb_hazy_coarse, 
+            "hazy_fine": rgb_hazy_fine
         }
+
         return outputs
 
     def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:

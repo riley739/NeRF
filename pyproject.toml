@@ -11,3 +11,4 @@ include = ["my_method*"]
 
 [project.entry-points.'nerfstudio.method_configs']
 my-method = 'my_method.my_config:MyMethod'
+nerfacto-test = 'nerfacto_test.test_config.nerfactoTest'
