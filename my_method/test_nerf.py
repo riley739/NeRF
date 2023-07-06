@@ -128,9 +128,10 @@ class Nerfacto_testModelConfig(ModelConfig):
     """Dimension of the appearance embedding."""
 
 def light_model(images, depths):
-    A = 1
-    B = 1 
-
+    A = 0.8
+    B = 0.3
+    print("HERHERHHREHR")
+    print(images)
     hazy = images*math.e**(-B*depths) + A*(1 - math.e**(-B*depths))
 
     return hazy
