@@ -126,15 +126,30 @@ class Nerfacto_testModelConfig(ModelConfig):
     """Which implementation to use for the model."""
     appearance_embed_dim: int = 32
     """Dimension of the appearance embedding."""
-
+import cv2
 def light_model(images, depths):
-    A = 0.8
-    B = 0.3
-    print("HERHERHHREHR")
-    print(images)
-    hazy = images*math.e**(-B*depths) + A*(1 - math.e**(-B*depths))
+    # A = 0.8
+    # B = 0.3
+    # print(images.size())
+    # image = torch.reshape(images, (32, 32, 3))
+    # image = image.cpu().detach().numpy()
+    
+    
+    # cv2.imwrite("og.png",image)
+    
+    # cv2.imwrite("og255.png",image*255)
+    # hazy = images*math.e**(-B*depths) + A*(1 - math.e**(-B*depths))
+    
+    # hazy1 = torch.reshape(hazy, (32, 32, 3))
+    # hazy1 = hazy1.cpu().detach().numpy()
+    
+    # cv2.imwrite("hazy.png",hazy1)
+    
+    # cv2.imwrite("hazy255.png",hazy1*255)
+    
+    
+    return images
 
-    return hazy
 
 class NerfactoModel(Model):
     """Nerfacto model
