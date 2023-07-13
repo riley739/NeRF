@@ -128,27 +128,46 @@ class Nerfacto_testModelConfig(ModelConfig):
     """Dimension of the appearance embedding."""
 import cv2
 def light_model(images, depths):
-    # A = 0.8
-    # B = 0.3
-    # print(images.size())
-    # image = torch.reshape(images, (32, 32, 3))
+    
+    A = [1.5,0.1,2.5]
+    B = [1.5,0.1,2.5]
+
+    r,g,b = images.unbind(1)
+
+    r = r*255
+    g = g*255
+    b = b*255
+
+    r_hazy = r * torch.flatten(math.e**(-B[0]*depths))  + torch.flatten( A[0]*(1 - math.e**(-B[0]*depths)))
+
+
+    g_hazy = g * torch.flatten(math.e**(-B[1]*depths))  + torch.flatten( A[1]*(1 - math.e**(-B[1]*depths)))
+
+    b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( A[2]*(1 - math.e**(-B[2]*depths)))
+
+
+    size = r_hazy.size(dim=0)
+    r_hazy = torch.reshape(r_hazy,(size,1))
+    g_hazy = torch.reshape(g_hazy,(size,1))
+    b_hazy = torch.reshape(b_hazy,(size,1))
+
+    hazy = torch.cat((r_hazy/255,g_hazy/255,b_hazy/255), dim=1)
+    
+    torch.clamp_(hazy, min=0.0, max=1.0)
+
+    # image = torch.reshape(images,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
     # image = image.cpu().detach().numpy()
     
     
-    # cv2.imwrite("og.png",image)
+    # # cv2.imwrite("og.png",cv2.cvtColor(image, cv2.COLOR_RGB2BGR)*255)
     
-    # cv2.imwrite("og255.png",image*255)
-    # hazy = images*math.e**(-B*depths) + A*(1 - math.e**(-B*depths))
     
-    # hazy1 = torch.reshape(hazy, (32, 32, 3))
+    # hazy1 = torch.reshape(hazy,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
     # hazy1 = hazy1.cpu().detach().numpy()
     
-    # cv2.imwrite("hazy.png",hazy1)
+    # cv2.imwrite("hazy255.png",cv2.cvtColor(hazy1, cv2.COLOR_RGB2BGR)*255)
     
-    # cv2.imwrite("hazy255.png",hazy1*255)
-    
-    
-    return images
+    return hazy
 
 
 class NerfactoModel(Model):
@@ -293,6 +312,7 @@ class NerfactoModel(Model):
                     func=self.proposal_sampler.step_cb,
                 )
             )
+        
         return callbacks
 
     def get_outputs(self, ray_bundle: RayBundle):
@@ -312,9 +332,9 @@ class NerfactoModel(Model):
         hazy = light_model(rgb,depth)
         outputs = {
             "rgb": rgb,
+            "hazy": hazy,
             "accumulation": accumulation,
             "depth": depth,
-            "hazy": hazy
         }
 
         if self.config.predict_normals:
