@@ -1,33 +1,49 @@
 import cv2
 import torch 
 import numpy as np 
-import random 
 import math
 
+
+def hist_eq(image):
+
+    img_y_cr_cb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+    y, cr, cb = cv2.split(img_y_cr_cb)
+
+    # Applying equalize Hist operation on Y channel.
+    y_eq = cv2.equalizeHist(y)
+
+    img_y_cr_cb_eq = cv2.merge((y_eq, cr, cb))
+    img_rgb_eq = cv2.cvtColor(img_y_cr_cb_eq, cv2.COLOR_YCR_CB2BGR)
+    
+    return img_rgb_eq
 
 def light_model(images, depths, A, B):
     
 
     r,g,b = images.unbind(1)
 
-    r = r
-    g = g
-    b = b
+    r_hazy = r
+    g_hazy = g
+    b_hazy = b
 
-    r_hazy = r * torch.flatten(math.e**(-B[0]*depths))  + torch.flatten( A[0]*(1 - math.e**(-B[0]*depths)))
+    # r_hazy = r * torch.flatten(math.e**(-B[0]*depths))  + torch.flatten( A[0]*(1 - math.e**(-B[0]*depths)))
 
+    r = (r_hazy - torch.flatten( A[0]*(1 - math.e**(-B[0]*depths))) ) / torch.flatten(math.e**(-B[0]*depths))
 
-    g_hazy = g * torch.flatten(math.e**(-B[1]*depths))  + torch.flatten( A[1]*(1 - math.e**(-B[1]*depths)))
+    # g_hazy = g * torch.flatten(math.e**(-B[1]*depths))  + torch.flatten( A[1]*(1 - math.e**(-B[1]*depths)))
 
-    b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( A[2]*(1 - math.e**(-B[2]*depths)))
+    g = (g_hazy - torch.flatten( A[1]*(1 - math.e**(-B[1]*depths))) ) / torch.flatten(math.e**(-B[1]*depths))
+    
+    # b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( A[2]*(1 - math.e**(-B[2]*depths)))
 
+    b = (b_hazy - torch.flatten( A[2]*(1 - math.e**(-B[2]*depths))) ) / torch.flatten(math.e**(-B[2]*depths))
 
-    size = r_hazy.size(dim=0)
-    r_hazy = torch.reshape(r_hazy,(size,1))
-    g_hazy = torch.reshape(g_hazy,(size,1))
-    b_hazy = torch.reshape(b_hazy,(size,1))
+    size = r.size(dim=0)
+    r = torch.reshape(r,(size,1))
+    g = torch.reshape(g,(size,1))
+    b = torch.reshape(b,(size,1))
 
-    hazy = torch.cat((r_hazy,g_hazy,b_hazy), dim=1)
+    hazy = torch.cat((r,g,b), dim=1)
     
 
     # image = torch.reshape(images,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
@@ -58,18 +74,20 @@ def calculate_average_color(image):
     height, width, _ = image.shape
     return np.mean(image.reshape(height * width, -1), axis=0)
 
-def grey_world_assumption(image):
+def grey_world_assumption(image, hist):
     """Check if an image satisfies the Grey World assumption."""
     grey_value = np.array([128, 128, 128])  # Neutral grey value in RGB (128, 128, 128)
     average_color = calculate_average_color(image)
-    distance_to_grey = np.linalg.norm(average_color - grey_value)
+    average_color1 = calculate_average_color(hist)
+    distance_to_grey = np.linalg.norm(average_color - average_color1)
     return distance_to_grey
 
 
 if __name__ == "__main__":
-    image = cv2.imread('test.png')
+    image = cv2.imread('lego.png')
+    hist = hist_eq(image)
+    
     height,width, _ = image.shape
-    print(image.shape)
     image = image.reshape(image.shape[0]*image.shape[1],3)
 
     depths = torch.from_numpy(np.ones(image.shape[0]))
@@ -83,21 +101,23 @@ if __name__ == "__main__":
 
 
     for i in range(10000):
-        A = [i + random.uniform(-0.1,0.1) for i in A_og]
-        B = [i + random.uniform(-0.1,0.1) for i in B_og]
+        A = [ min(1,max(0,i + np.random.uniform(-0.1,0.1))) for i in A_og]
+        B_val = np.random.uniform(-0.1,0.1)
+        B = [min(1,max(0,i + B_val)) for i in B_og]
 
-        
-        clear = light_model(image,depths,A,B)
+        # print(A)
+        clear = light_model(image,depths,A_og,B_og)
         clear = clear.numpy()
         clear = clear.reshape(height,width,3)
-        distance = grey_world_assumption(clear)
-        print(f"Current Count {count}, Distance {distance}")
-        if distance < 75:
+        distance = grey_world_assumption(clear,hist)
+        # print(f"Current Count {count}, Distance {distance}")
+        if distance < 50:
             images.append(clear)
             distances.append(distance)
             count += 1
+            print(f"Current Count {count}, Distance {distance}, A {A} , B {B}")
 
-        if abs(distance - previous_distance) < 3: 
+        if distance <= previous_distance: 
             B_og = B
             A_og = A
 
