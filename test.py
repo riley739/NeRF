@@ -4,20 +4,70 @@ import numpy as np
 import math
 
 
+DEFAULT_A = [0.1,0.3,0.2]
+DEFAULT_B = [1,1,1]
+    
+def light_model(images, depths, A = None, B = None):
+    
+    if A is None:
+        A = DEFAULT_A
+    
+    if B is None:
+        B = DEFAULT_B
+
+    r,g,b = images.unbind(1)
+
+    r = r*255
+    g = g*255
+    b = b*255
+
+    r_hazy = r * torch.flatten(math.e**(-B[0]*depths))  + torch.flatten( A[0]*(1 - math.e**(-B[0]*depths)))
+
+
+    g_hazy = g * torch.flatten(math.e**(-B[1]*depths))  + torch.flatten( A[1]*(1 - math.e**(-B[1]*depths)))
+
+    b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( A[2]*(1 - math.e**(-B[2]*depths)))
+
+
+    size = r_hazy.size(dim=0)
+    r_hazy = torch.reshape(r_hazy,(size,1))
+    g_hazy = torch.reshape(g_hazy,(size,1))
+    b_hazy = torch.reshape(b_hazy,(size,1))
+
+    hazy = torch.cat((r_hazy/255,g_hazy/255,b_hazy/255), dim=1)
+    
+    torch.clamp_(hazy, min=0.0, max=1.0)
+
+    # image = torch.reshape(images,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
+    # image = image.cpu().detach().numpy()
+    
+    
+    # # cv2.imwrite("og.png",cv2.cvtColor(image, cv2.COLOR_RGB2BGR)*255)
+    
+    
+    # hazy1 = torch.reshape(hazy,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
+    # hazy1 = hazy1.cpu().detach().numpy()
+    
+    # cv2.imwrite("hazy255.png",cv2.cvtColor(hazy1, cv2.COLOR_RGB2BGR)*255)
+    
+    return hazy
+
 def hist_eq(image):
 
-    img_y_cr_cb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+    img_y_cr_cb = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
     y, cr, cb = cv2.split(img_y_cr_cb)
 
     # Applying equalize Hist operation on Y channel.
-    y_eq = cv2.equalizeHist(y)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    y_eq = clahe.apply(y)
 
     img_y_cr_cb_eq = cv2.merge((y_eq, cr, cb))
-    img_rgb_eq = cv2.cvtColor(img_y_cr_cb_eq, cv2.COLOR_YCR_CB2BGR)
+    img_rgb_eq = cv2.cvtColor(img_y_cr_cb_eq, cv2.COLOR_YCR_CB2RGB)
     
     return img_rgb_eq
+    
 
-def light_model(images, depths, A, B):
+def light_model_reverse(images, depths, A, B):
     
 
     r,g,b = images.unbind(1)
@@ -76,7 +126,7 @@ def calculate_average_color(image):
 
 def grey_world_assumption(image, hist):
     """Check if an image satisfies the Grey World assumption."""
-    grey_value = np.array([128, 128, 128])  # Neutral grey value in RGB (128, 128, 128)
+    # grey_value = np.array([128, 128, 128])  # Neutral grey value in RGB (128, 128, 128)
     average_color = calculate_average_color(image)
     average_color1 = calculate_average_color(hist)
     distance_to_grey = np.linalg.norm(average_color - average_color1)
@@ -84,14 +134,17 @@ def grey_world_assumption(image, hist):
 
 
 if __name__ == "__main__":
-    image = cv2.imread('lego.png')
-    hist = hist_eq(image)
-    
-    height,width, _ = image.shape
-    image = image.reshape(image.shape[0]*image.shape[1],3)
+    og_image = cv2.cvtColor(cv2.imread('lego.png'),cv2.COLOR_BGR2RGB)
+
+    hist = hist_eq(og_image)
+    height,width, _ = og_image.shape
+    image = og_image.reshape(og_image.shape[0]*og_image.shape[1],3)
+    hist = hist.reshape(height*width,3)
 
     depths = torch.from_numpy(np.ones(image.shape[0]))
     image = torch.from_numpy(image)
+    hist = torch.from_numpy(hist)
+    
     images = []
     distances = []
     count = 0 
@@ -102,15 +155,15 @@ if __name__ == "__main__":
 
     for i in range(10000):
         A = [ min(1,max(0,i + np.random.uniform(-0.1,0.1))) for i in A_og]
-        B_val = np.random.uniform(-0.1,0.1)
-        B = [min(1,max(0,i + B_val)) for i in B_og]
+        # B_val = np.random.uniform(-0.1,0.1)
+        B = [ min(1,max(0,i + np.random.uniform(-0.1,0.1))) for i in B_og]
 
         # print(A)
-        clear = light_model(image,depths,A_og,B_og)
+        clear = light_model(hist,depths,A_og,B_og)
         clear = clear.numpy()
         clear = clear.reshape(height,width,3)
-        distance = grey_world_assumption(clear,hist)
-        # print(f"Current Count {count}, Distance {distance}")
+        distance = grey_world_assumption(clear,og_image)
+        print(f"Current Count {count}, Distance {distance}")
         if distance < 50:
             images.append(clear)
             distances.append(distance)
@@ -125,7 +178,7 @@ if __name__ == "__main__":
             break
 
     for img,name in zip(images,distances):
-        cv2.imwrite(f"Images/Image{name}.png",img) 
+        cv2.imwrite(f"Images/Image{name}.png",cv2.cvtColor(img,cv2.COLOR_RGB2BGR)) 
 
 
 

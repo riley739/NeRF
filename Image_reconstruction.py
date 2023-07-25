@@ -9,7 +9,8 @@ def hist_eq(image):
     y, cr, cb = cv2.split(img_y_cr_cb)
 
     # Applying equalize Hist operation on Y channel.
-    y_eq = cv2.equalizeHist(y)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    y_eq = clahe.apply(y)
 
     img_y_cr_cb_eq = cv2.merge((y_eq, cr, cb))
     img_rgb_eq = cv2.cvtColor(img_y_cr_cb_eq, cv2.COLOR_YCR_CB2RGB)
@@ -17,7 +18,7 @@ def hist_eq(image):
     return img_rgb_eq
     
     
-og = torch.tensor(cv2.cvtColor(cv2.imread("test.png"), cv2.COLOR_BGR2RGB))
+og = torch.tensor(cv2.cvtColor(cv2.imread("lego.png"), cv2.COLOR_BGR2RGB))
 images = torch.reshape(og,(og.size(0)*og.size(1),3))
 A = [0.4,0.6,0.2]
 
@@ -61,7 +62,7 @@ hazy = hazy.numpy()
 cv2.imwrite("output.png",cv2.cvtColor(hazy, cv2.COLOR_RGB2BGR))
 
 
-image = hist_eq(cv2.cvtColor(cv2.imread("test.png"), cv2.COLOR_BGR2RGB))
+image = hist_eq(cv2.cvtColor(cv2.imread("lego.png"), cv2.COLOR_BGR2RGB))
 cv2.imwrite("hist.png",cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 # # hazy = og*math.e**(-beta*d) + a*(1 - math.e**(-beta*d))
  
