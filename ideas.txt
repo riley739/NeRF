@@ -8,4 +8,13 @@ prior
 Help:
 cry
 
+colour correction:
+contrast and noise exceptoin 
+- Underwater Images Enhancement by Revised
+Underwater Images Formation Model
 
+https://opg.optica.org/oe/fulltext.cfm?uri=oe-30-14-24295&id=477113
+
+https://opg.optica.org/oe/fulltext.cfm?uri=oe-30-16-29099&id=481504
+
+https://opg.optica.org/oe/fulltext.cfm?uri=oe-30-10-17290&id=472583
