@@ -48,8 +48,8 @@ from nerfstudio.model_components.scene_colliders import NearFarCollider
 from nerfstudio.model_components.shaders import NormalsShader
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps
-from .utils import light_model
 
+from .utils import light_model
 @dataclass
 class Nerfacto_testModelConfig(ModelConfig):
     """Nerfacto Model Config"""
@@ -126,6 +126,7 @@ class Nerfacto_testModelConfig(ModelConfig):
     """Which implementation to use for the model."""
     appearance_embed_dim: int = 32
     """Dimension of the appearance embedding."""
+
 
 class NerfactoModel(Model):
     """Nerfacto model
@@ -269,7 +270,6 @@ class NerfactoModel(Model):
                     func=self.proposal_sampler.step_cb,
                 )
             )
-        
         return callbacks
 
     def get_outputs(self, ray_bundle: RayBundle):
@@ -286,13 +286,12 @@ class NerfactoModel(Model):
         rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
         accumulation = self.renderer_accumulation(weights=weights)
-        hazy = light_model(rgb,depth)
-        
+        # hazy = light_model(rgb,depth)
         outputs = {
             "rgb": rgb,
-            "hazy": hazy,
             "accumulation": accumulation,
             "depth": depth,
+            # "hazy": hazy
         }
 
         if self.config.predict_normals:
@@ -332,7 +331,8 @@ class NerfactoModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
         image = batch["image"].to(self.device)
-        loss_dict["rgb_loss"] = self.rgb_loss(image, outputs["hazy"])
+        clear_image = light_model(image,outputs["depth"])
+        loss_dict["rgb_loss"] = self.rgb_loss(clear_image, outputs["rgb"])
         if self.training:
             loss_dict["interlevel_loss"] = self.config.interlevel_loss_mult * interlevel_loss(
                 outputs["weights_list"], outputs["ray_samples_list"]
