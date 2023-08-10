@@ -1,9 +1,9 @@
 import torch
 import math
 
-DEFAULT_A = [0.1,0.3,0.2]
-DEFAULT_B = [1,1,1]
-    
+DEFAULT_A = [0.36108535471698466, 0.3015346593573295, 0.28175415155136363]
+DEFAULT_B = [0.30481738290027693, 0.12575316833412786, 0.059533905466726766]
+     
 def light_model(images, depths, A = None, B = None):
     
     if A is None:
