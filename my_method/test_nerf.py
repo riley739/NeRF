@@ -49,7 +49,7 @@ from nerfstudio.model_components.shaders import NormalsShader
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps
 
-from .utils import light_model
+from .utils import *
 @dataclass
 class Nerfacto_testModelConfig(ModelConfig):
     """Nerfacto Model Config"""
@@ -272,8 +272,9 @@ class NerfactoModel(Model):
             )
         return callbacks
 
-    def get_outputs(self, ray_bundle: RayBundle):
+    def get_outputs(self, ray_bundle: RayBundle, image):
         ray_samples: RaySamples
+        
         ray_samples, weights_list, ray_samples_list = self.proposal_sampler(ray_bundle, density_fns=self.density_fns)
         field_outputs = self.field.forward(ray_samples, compute_normals=self.config.predict_normals)
         if self.config.use_gradient_scaling:
@@ -286,12 +287,20 @@ class NerfactoModel(Model):
         rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
         accumulation = self.renderer_accumulation(weights=weights)
-        # hazy = light_model(rgb,depth)
+
+        if image is not None:
+            hazy = light_model(rgb,depth,image["image"])
+        else:
+            hazy = None
+        
+        # save_img(image["image"],"testImage.png")
+        # save_img(rgb,"testRGBImage.png")
+        
         outputs = {
             "rgb": rgb,
             "accumulation": accumulation,
             "depth": depth,
-            # "hazy": hazy
+            "hazy": hazy
         }
 
         if self.config.predict_normals:
@@ -331,8 +340,7 @@ class NerfactoModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
         image = batch["image"].to(self.device)
-        clear_image = light_model(image,outputs["depth"])
-        loss_dict["rgb_loss"] = self.rgb_loss(clear_image, outputs["rgb"])
+        loss_dict["rgb_loss"] = self.rgb_loss(image, outputs["rgb"])
         if self.training:
             loss_dict["interlevel_loss"] = self.config.interlevel_loss_mult * interlevel_loss(
                 outputs["weights_list"], outputs["ray_samples_list"]

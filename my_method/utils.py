@@ -5,36 +5,49 @@ import cv2
 DEFAULT_A = [0.1,0.3,0.2]
 DEFAULT_B = [1,1,1]
     
-def light_model(images, depths, A = None, B = None):
-    # if A is None:
-    #     A = DEFAULT_A
+def light_model(images, depths, og_img, A = None, B = None):
+    if A is None:
+        A = DEFAULT_A
     
-    # if B is None:
-    #     B = DEFAULT_B
-    # # print(depths)
+    if B is None:
+        B = DEFAULT_B
     r,g,b = images.unbind(1)
-
     # r = r*255
     # g = g*255
     # b = b*255
     
     image = images.cpu().detach().numpy()
     depthMap = depths.cpu().detach().numpy()
+    og_img =  og_img.cpu().detach().numpy()
+
     image = np.reshape(image,(depthMap.size,3))
     depthMap = np.reshape(depthMap,(depthMap.size))
+    og_img = np.reshape(og_img,(depthMap.size,3))
     
+    ind  = find_furthest_points(depthMap)
     
-    coeff_r, coeff_b, coeff_g = find_atm_light(image,depthMap)
+    points = og_img[ind]
     
-    print(coeff_r)
+    V_R,V_G,V_B = find_veiling_light(points)
+
+    # coeff_r, coeff_b, coeff_g = find_pointsatm_light(og_img,depthMap)
+    
+    # print(coeff_KCr)
     # r_hazy = r * torch.flatten(math.e**(-coeff_r[3]*depths))  + torch.flatten( coeff_r[0]*(1 - math.e**(-coeff_r[1]*depths)))
-    r_hazy = ( r - torch.flatten( coeff_r[0]*(1 - math.e**(-coeff_r[1]*depths))) )/torch.flatten(math.e**(-coeff_r[3]*depths))
+    # r_hazy = ( r - torch.flatten( coeff_r[0]*(1 - math.e**(-coeff_r[1]*depths))) )/torch.flatten(math.e**(-coeff_r[3]*depths))
 
     # g_hazy = g * torch.flatten(math.e**(-coeff_g[3]*depths))  + torch.flatten( coeff_g[0]*(1 - math.e**(-coeff_g[1]*depths)))
-    g_hazy = ( g - torch.flatten( coeff_g[0]*(1 - math.e**(-coeff_g[1]*depths))) )/torch.flatten(math.e**(-coeff_g[3]*depths))
+    # g_hazy = ( g - torch.flatten( coeff_g[0]*(1 - math.e**(-coeff_g[1]*depths))) )/torch.flatten(math.e**(-coeff_g[3]*depths))
     
     # b_hazy = b * torch.flatten(math.e**(-coeff_b[3]*depths))  + torch.flatten( coeff_b[0]*(1 - math.e**(-coeff_b[1]*depths)))
-    b_hazy = ( b - torch.flatten( coeff_b[0]*(1 - math.e**(-coeff_b[1]*depths))) )/torch.flatten(math.e**(-coeff_b[3]*depths))
+    # b_hazy = ( b - torch.flatten( coeff_b[0]*(1 - math.e**(-coeff_b[1]*depths))) )/torch.flatten(math.e**(-coeff_b[3]*depths))
+    
+    
+    
+    r_hazy = r * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( V_R*(1 - math.e**(-B[1]*depths)))
+    g_hazy = g * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( V_G*(1 - math.e**(-B[1]*depths)))
+    b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( V_B*(1 - math.e**(-B[1]*depths)))
+
 
 
     size = r_hazy.size(dim=0)
@@ -62,7 +75,31 @@ def light_model(images, depths, A = None, B = None):
     
     return hazy
 
+def find_furthest_points(depths):
+    #TODO maybe check on density values not the distance like relook at NeRF things
+    # Get 5% of furthest away points 
+    # TODO maybe change to 1 %
+    pixels = int(depths.size*0.05)
+    ind = np.argpartition(depths, pixels-1)[:pixels]
 
+    # TODO maybe put something in here to check mean /stddev
+    # max_array = depths[ind]
+    
+    return ind
+
+def find_veiling_light(points):
+    
+    r,g,b    = points[:, 0], points[:,1], points[:,  2] # For RGB image
+    
+    R = np.mean(r)
+    G = np.mean(g)
+    B = np.mean(b)
+    
+    stddev_R, stddev_G, stddev_B = np.std(r), np.std(g), np.std(b)
+
+    # print(f"R is {R} with stddev {stddev_R}\n G is {G} with stddev {stddev_G}\n B is {B} with stddev {stddev_G}")
+    return R , G , B
+    
 import sys
 import numpy as np
 import scipy as sp
@@ -135,12 +172,25 @@ def find_atm_light(image,depths):
 
     return coefsR, coefsG, coefsB
 
+
+def save_img(img,pth):
+    img = torch.reshape(img,(int(img.size(0)**(1/2)), int(img.size(0)**(1/2)),3))
+    img = img.cpu().detach().numpy()*255
+    
+    
+    cv2.imwrite(pth,img)
+    
 def save_img_u8(img, pth):
-  """Save an image (probably RGB) in [0, 1] to disk as a uint8 PNG."""
-  with open_file(pth, 'wb') as f:
-    Image.fromarray(
-        (np.clip(np.nan_to_num(img), 0., 1.) * 255.).astype(np.uint8)).save(
-            f, 'PNG')
+    """Save an image (probably RGB) in [0, 1] to disk as a uint8 PNG."""
+
+    try:
+        img = img.cpu().detach().numpy()
+    except AttributeError:
+        pass
+    with open(pth, 'wb') as f:
+        Image.fromarray(
+            (np.clip(np.nan_to_num(img), 0., 1.) * 255.).astype(np.uint8)).save(
+                f, 'PNG')
 
 
 def save_img_f32(depthmap, pth):
