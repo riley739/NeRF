@@ -1,35 +1,54 @@
 import torch
 import math
+import cv2 
+import numpy as np 
 
 DEFAULT_A = [0.36108535471698466, 0.3015346593573295, 0.28175415155136363]
 DEFAULT_B = [0.30481738290027693, 0.12575316833412786, 0.059533905466726766]
-     
-def light_model(images, depths, A = None, B = None):
     
+def light_model(images, depths, og_img, A = None, B = None):
     if A is None:
         A = DEFAULT_A
     
     if B is None:
         B = DEFAULT_B
-
     r,g,b = images.unbind(1)
+    if og_img is None:
+        og_img = images
+    # r = r*255
+    # g = g*255
+    # b = b*255
+    
+    image = images.cpu().detach().numpy()
+    depthMap = depths.cpu().detach().numpy()
+    og_img =  og_img.cpu().detach().numpy()
 
-    r = r*255
-    g = g*255
-    b = b*255
+    image = np.reshape(image,(depthMap.size,3))
+    depthMap = np.reshape(depthMap,(depthMap.size))
+    og_img = np.reshape(og_img,(depthMap.size,3))
+    ind  = find_furthest_points(depthMap)
+    points = og_img[ind]
+    
+    V_R,V_G,V_B = find_veiling_light(points)
+    V_R,V_G,V_B  = 0.1,0.3,0.2
+    # coeff_r, coeff_b, coeff_g = find_pointsatm_light(og_img,depthMap)
+    
+    # print(coeff_KCr)
+    # r_hazy = r * torch.flatten(math.e**(-coeff_r[3]*depths))  + torch.flatten( coeff_r[0]*(1 - math.e**(-coeff_r[1]*depths)))
+    # r_hazy = ( r - torch.flatten( coeff_r[0]*(1 - math.e**(-coeff_r[1]*depths))) )/torch.flatten(math.e**(-coeff_r[3]*depths))
 
-    r_hazy = r * torch.flatten(math.e**(-B[0]*depths))  + torch.flatten( A[0]*(1 - math.e**(-B[0]*depths)))
-    # r_hazy = (r - torch.flatten( A[0]*(1 - math.e**(-B[0]*depths))) ) / torch.flatten(math.e**(-B[0]*depths))
-
-    g_hazy = g * torch.flatten(math.e**(-B[1]*depths))  + torch.flatten( A[1]*(1 - math.e**(-B[1]*depths)))
-    # g_hazy = (g - torch.flatten( A[1]*(1 - math.e**(-B[1]*depths))) ) / torch.flatten(math.e**(-B[1]*depths))
-
-
-
-    b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( A[2]*(1 - math.e**(-B[2]*depths)))
-    # b_hazy = (b - torch.flatten( A[2]*(1 - math.e**(-B[2]*depths))) ) / torch.flatten(math.e**(-B[2]*depths))
+    # g_hazy = g * torch.flatten(math.e**(-coeff_g[3]*depths))  + torch.flatten( coeff_g[0]*(1 - math.e**(-coeff_g[1]*depths)))
+    # g_hazy = ( g - torch.flatten( coeff_g[0]*(1 - math.e**(-coeff_g[1]*depths))) )/torch.flatten(math.e**(-coeff_g[3]*depths))
+    
+    # b_hazy = b * torch.flatten(math.e**(-coeff_b[3]*depths))  + torch.flatten( coeff_b[0]*(1 - math.e**(-coeff_b[1]*depths)))
+    # b_hazy = ( b - torch.flatten( coeff_b[0]*(1 - math.e**(-coeff_b[1]*depths))) )/torch.flatten(math.e**(-coeff_b[3]*depths))
     
     
+    
+    r_hazy = r * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( V_R*(1 - math.e**(-B[1]*depths)))
+    g_hazy = g * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( V_G*(1 - math.e**(-B[1]*depths)))
+    b_hazy = b * torch.flatten(math.e**(-B[2]*depths))  + torch.flatten( V_B*(1 - math.e**(-B[1]*depths)))
+
 
 
     size = r_hazy.size(dim=0)
@@ -37,7 +56,9 @@ def light_model(images, depths, A = None, B = None):
     g_hazy = torch.reshape(g_hazy,(size,1))
     b_hazy = torch.reshape(b_hazy,(size,1))
 
-    hazy = torch.cat((r_hazy/255,g_hazy/255,b_hazy/255), dim=1)
+    # hazy = torch.cat((r_hazy/255,g_hazy/255,b_hazy/255), dim=1)
+    hazy = torch.cat((r_hazy,g_hazy,b_hazy), dim=1)
+    
     
     torch.clamp_(hazy, min=0.0, max=1.0)
 
@@ -45,7 +66,7 @@ def light_model(images, depths, A = None, B = None):
     # image = image.cpu().detach().numpy()
     
     
-    # # cv2.imwrite("og.png",cv2.cvtColor(image, cv2.COLOR_RGB2BGR)*255)
+    # cv2.imwrite("og.png",cv2.cvtColor(image, cv2.COLOR_RGB2BGR)*255)
     
     
     # hazy1 = torch.reshape(hazy,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
@@ -54,3 +75,53 @@ def light_model(images, depths, A = None, B = None):
     # cv2.imwrite("hazy255.png",cv2.cvtColor(hazy1, cv2.COLOR_RGB2BGR)*255)
     
     return hazy
+
+def find_furthest_points(depths):
+    #TODO maybe check on density values not the distance like relook at NeRF things
+    # Get 5% of furthest away points 
+    # TODO maybe change to 1 %
+    pixels = int(depths.size*0.05)
+    ind = np.argpartition(depths, pixels-1)[:pixels]
+
+    # TODO maybe put something in here to check mean /stddev
+    # max_array = depths[ind]
+    
+    return ind
+
+def find_veiling_light(points):
+    
+    r,g,b    = points[:, 0], points[:,1], points[:,  2] # For RGB image
+    
+    R = np.mean(r)
+    G = np.mean(g)
+    B = np.mean(b)
+
+
+    print(f"R is {R}, G is {G}, B is {B} ")
+    return R , G , B
+
+
+def save_img(img,pth):
+    img = torch.reshape(img,(int(img.size(0)**(1/2)), int(img.size(0)**(1/2)),3))
+    img = img.cpu().detach().numpy()*255
+    
+    
+    cv2.imwrite(pth,img)
+    
+# def save_img_u8(img, pth):
+#     """Save an image (probably RGB) in [0, 1] to disk as a uint8 PNG."""
+
+#     try:
+#         img = img.cpu().detach().numpy()
+#     except AttributeError:
+#         pass
+#     with open(pth, 'wb') as f:
+#         Image.fromarray(
+#             (np.clip(np.nan_to_num(img), 0., 1.) * 255.).astype(np.uint8)).save(
+#                 f, 'PNG')
+
+
+# def save_img_f32(depthmap, pth):
+#   """Save an image (probably a depthmap) to disk as a float32 TIFF."""
+#   with open_file(pth, 'wb') as f:
+#     Image.fromarray(np.nan_to_num(depthmap).astype(np.float32),mode="RGB").save(f, 'TIFF')

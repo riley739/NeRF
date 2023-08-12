@@ -48,8 +48,8 @@ from nerfstudio.model_components.scene_colliders import NearFarCollider
 from nerfstudio.model_components.shaders import NormalsShader
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps
-from .utils import light_model
 
+from .utils import *
 @dataclass
 class Nerfacto_testModelConfig(ModelConfig):
     """Nerfacto Model Config"""
@@ -126,6 +126,7 @@ class Nerfacto_testModelConfig(ModelConfig):
     """Which implementation to use for the model."""
     appearance_embed_dim: int = 32
     """Dimension of the appearance embedding."""
+
 
 class NerfactoModel(Model):
     """Nerfacto model
@@ -269,11 +270,11 @@ class NerfactoModel(Model):
                     func=self.proposal_sampler.step_cb,
                 )
             )
-        
         return callbacks
 
-    def get_outputs(self, ray_bundle: RayBundle):
+    def get_outputs(self, ray_bundle: RayBundle, image):
         ray_samples: RaySamples
+        
         ray_samples, weights_list, ray_samples_list = self.proposal_sampler(ray_bundle, density_fns=self.density_fns)
         field_outputs = self.field.forward(ray_samples, compute_normals=self.config.predict_normals)
         if self.config.use_gradient_scaling:
@@ -286,7 +287,16 @@ class NerfactoModel(Model):
         rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
         accumulation = self.renderer_accumulation(weights=weights)
-        hazy = light_model(rgb,depth)
+
+        if image is not None:
+            hazy = light_model(rgb,depth,image["image"])
+            save_img(hazy,"testHazyImage.png")
+            
+        else:
+            hazy = light_model(rgb,depth,None)
+        
+        # save_img(image["image"],"testImage.png")
+        # save_img(rgb,"testRGBImage.png")
         
         outputs = {
             "rgb": rgb,
