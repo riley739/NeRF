@@ -13,8 +13,7 @@ from nerfstudio.pipelines.base_pipeline import (
 )
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, VanillaDataManagerConfig
 
-from uwNerfDataManager import uwNerfDataManagerConfig, uwNerfDataManager
-from uwNerf import uwNerfModelConfig, uwNerfModel
+from uwNerf.uwNerf import uwNerfModelConfig, uwNerfModel
 from torch.cuda.amp.grad_scaler import GradScaler
 
 
@@ -24,7 +23,7 @@ class uwNerfPipelineConfig(cfg.InstantiateConfig):
 
     _target: Type = field(default_factory=lambda: uwNerfPipeline)
     """target class to instantiate"""
-    datamanager:  = uwNerfDataManagerConfig()
+    datamanager: VanillaDataManagerConfig = VanillaDataManagerConfig()
     """specifies the datamanager config"""
     model: uwNerfModelConfig = uwNerfModelConfig()
     """specifies the model config"""
@@ -44,7 +43,7 @@ class uwNerfPipeline(VanillaPipeline):
         self.config = config
         self.test_mode = test_mode
         
-        self.datamanager: uwNerfDataManager = config.datamanager.setup(
+        self.datamanager: VanillaDataManager = config.datamanager.setup(
             device=device,
             test_mode=test_mode,
             world_size=world_size,

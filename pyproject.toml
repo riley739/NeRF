@@ -1,5 +1,5 @@
 [project]
-name = "my_method"
+name = "uwNerf"
 version = "0.1.1"
 
 dependencies = [
@@ -7,7 +7,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["my_method*"]
+include = ["uwNerf*"]
 
 [project.entry-points.'nerfstudio.method_configs']
-my-method = 'my_method.my_config:MyMethod'
+uwnerf = 'uwNerf.uwNerfConfig:uwNerf'

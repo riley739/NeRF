@@ -23,7 +23,7 @@ from .utils import *
 @dataclass
 class uwNerfModelConfig(NerfactoModelConfig):
     """uwNerf Model Config"""
-    _target: Type = field(default_factory=lambda: uwNerfModelConfig)
+    _target: Type = field(default_factory=lambda: uwNerfModel)
 
 
 
