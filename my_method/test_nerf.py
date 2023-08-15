@@ -290,12 +290,12 @@ class NerfactoModel(Model):
 
         if image is not None:
             hazy = light_model(rgb,depth,image["image"])
-            save_img(hazy,"testHazyImage.png")
-            
+            # save_img(hazy,"testHazyImage.png")
+            # print("HI")
         else:
+            # print("HERE")
             hazy = light_model(rgb,depth,None)
-        
-        # save_img(image["image"],"testImage.png")
+        # hazy = light_model(rgb,depth)
         # save_img(rgb,"testRGBImage.png")
         
         outputs = {

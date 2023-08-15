@@ -17,9 +17,9 @@ def light_model(images, depths, A = None, B = None):
 
     r,g,b = images.unbind(1)
 
-    r = r
-    g = g
-    b = b
+    r = r/255
+    g = g/255
+    b = b/255
 
     r_hazy = r * torch.flatten(math.e**(-B[0]*depths))  + torch.flatten( A[0]*(1 - math.e**(-B[0]*depths)))
 
@@ -36,7 +36,7 @@ def light_model(images, depths, A = None, B = None):
 
     hazy = torch.cat((r_hazy,g_hazy,b_hazy), dim=1)
     
-    # torch.clamp_(hazy, min=0.0, max=1.0)
+    torch.clamp_(hazy, min=0.0, max=1.0)
 
     # image = torch.reshape(images,(int(images.size(0)**(1/2)), int(images.size(0)**(1/2)),3))
     # image = image.cpu().detach().numpy()
@@ -145,57 +145,65 @@ def compare_images(image1, image2):
     return sum(rgb_dist)/ (height * width* _)
 
 if __name__ == "__main__":
-    og_image = cv2.cvtColor(cv2.imread('image.png'),cv2.COLOR_BGR2RGB)
+    og_image = cv2.cvtColor(cv2.imread('lego.png'),cv2.COLOR_BGR2RGB)
+    og_image_clear = cv2.cvtColor(cv2.imread('legoClear.png'),cv2.COLOR_BGR2RGB)
 
-    hist = hist_eq(og_image)
-    cv2.imwrite("test_hist.png",cv2.cvtColor(hist,cv2.COLOR_RGB2BGR))
     height,width, _ = og_image.shape
     image = og_image.reshape(og_image.shape[0]*og_image.shape[1],3)
-    hist = hist.reshape(height*width,3)
+    image_clear = og_image_clear.reshape(og_image.shape[0]*og_image.shape[1],3)
 
     depths = torch.from_numpy(np.ones(image.shape[0]))
     image = torch.from_numpy(image)
-    hist = torch.from_numpy(hist)
+    image_clear = torch.from_numpy(image_clear)
     
     images = []
     distances = []
     count = 0 
-    A_og = [0,0,0]
-    B_og = [0,0,0]
-    previous_distance = sys.maxsize 
+    
+    # A = [0.07, 0.08, 0.08]
+    A = [0.36108535471698466, 0.3015346593573295, 0.28175415155136363]
+    
+    B = [0.30481738290027693, 0.12575316833412786, 0.059533905466726766]
+    # previous_distance = sys.maxsize 
+    uw = light_model(image_clear,depths,A,B)
+    uw = uw.numpy()*255
+    uw = uw.astype(np.uint8)
+    uw = uw.reshape(height,width,3)
+    print(uw)
+    
+    cv2.imwrite(f"Image2.png",cv2.cvtColor(uw,cv2.COLOR_RGB2BGR))
+    
+    # for i in range(10000):
+    #     A = [ min(1,max(0,i + np.random.uniform(-0.5,0.5))) for i in A_og]
+    #     # B_val = np.random.uniform(-0.1,0.1)
+    #     B = [ min(1,max(0,i + np.random.uniform(-0.5,0.5))) for i in B_og]
+
+    #     # print(A)
+    #     clear = light_model(hist,depths,A,B)
+    #     clear = clear.numpy()
+    #     clear = clear.reshape(height,width,3)
+    #     # distance = grey_world_assumption(clear,og_image)
+    #     distance = compare_images(clear,og_image)
+    #     print(f"Current Count {count}, Distance {distance}")
+
+    #     if distance < 25:
+    #         images.append(clear)
+    #         distances.append(distance)
+    #         count += 1
+    #         print(f"Current Count {count}, Distance {distance}, A {A} , B {B}")
 
 
-    for i in range(10000):
-        A = [ min(1,max(0,i + np.random.uniform(-0.5,0.5))) for i in A_og]
-        # B_val = np.random.uniform(-0.1,0.1)
-        B = [ min(1,max(0,i + np.random.uniform(-0.5,0.5))) for i in B_og]
+    #     if distance <= previous_distance: 
+    #         B_og = B
+    #         A_og = A
 
-        # print(A)
-        clear = light_model(hist,depths,A,B)
-        clear = clear.numpy()
-        clear = clear.reshape(height,width,3)
-        # distance = grey_world_assumption(clear,og_image)
-        distance = compare_images(clear,og_image)
-        print(f"Current Count {count}, Distance {distance}")
+    #     if count > 10:
+    #         break
 
-        if distance < 25:
-            images.append(clear)
-            distances.append(distance)
-            count += 1
-            print(f"Current Count {count}, Distance {distance}, A {A} , B {B}")
-
-
-        if distance <= previous_distance: 
-            B_og = B
-            A_og = A
-
-        if count > 10:
-            break
-
-    for img,name in zip(images,distances):
-        print(name)
-        print(img.shape )
-        cv2.imwrite(f"Images/Image{name}.png",cv2.cvtColor(og_image,cv2.COLOR_RGB2BGR)) 
+    # for img,name in zip(images,distances):
+    #     print(name)
+    #     print(img.shape )
+    #     cv2.imwrite(f"Images/Image{name}.png",cv2.cvtColor(og_image,cv2.COLOR_RGB2BGR)) 
 
 
 
