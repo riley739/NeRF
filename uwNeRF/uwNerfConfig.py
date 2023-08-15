@@ -13,7 +13,7 @@ from nerfstudio.data.dataparsers.nerfstudio_dataparser import NerfstudioDataPars
 from nerfstudio.engine.optimizers import RAdamOptimizerConfig
 from nerfstudio.engine.trainer import TrainerConfig
 
-from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
+from uwNerfPipeline import uwNerfPipelineConfig
 from uwNeRF import uwNerfModelConfig
 
 MyMethod = MethodSpecification(
@@ -23,7 +23,7 @@ MyMethod = MethodSpecification(
 	    steps_per_save=2000,
 	    max_num_iterations=30000,
 	    mixed_precision=True,
-	    pipeline=VanillaPipelineConfig(
+	    pipeline=uwNerfPipelineConfig(
 	        datamanager=VanillaDataManagerConfig(   
 	            dataparser=NerfstudioDataParserConfig(),
 	            train_num_rays_per_batch=1024,

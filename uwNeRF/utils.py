@@ -35,7 +35,7 @@ def light_model(images, depths, og_imgs, A = None, B = None):
         points = og_img[ind]
         
         V_R,V_G,V_B = find_veiling_light(points)
-    global firstTime
+    # global firstTime
     # if ((V_R > 0.2) and (firstTime == True)):
     #     save_img(og_imgs,"ogTestImage1.png")
     #     V_L = og_imgs
