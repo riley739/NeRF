@@ -13,12 +13,16 @@ from nerfstudio.data.dataparsers.nerfstudio_dataparser import NerfstudioDataPars
 from nerfstudio.engine.optimizers import RAdamOptimizerConfig
 from nerfstudio.engine.trainer import TrainerConfig
 
-from uwNerfPipeline import uwNerfPipelineConfig
-from uwNeRF import uwNerfModelConfig
 
-MyMethod = MethodSpecification(
+from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
+from nerfstudio.models.nerfacto import NerfactoModelConfig
+
+from uwNerf.uwNerfPipeline import uwNerfPipelineConfig
+from uwNerf.uwNerf import uwNerfModelConfig
+
+uwNerf = MethodSpecification(
     config=TrainerConfig(
-	    method_name="uwNerf",
+	    method_name="uwnerf",
 	    steps_per_eval_batch=500,
 	    steps_per_save=2000,
 	    max_num_iterations=30000,
@@ -54,5 +58,5 @@ MyMethod = MethodSpecification(
 	    viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
         vis="viewer",
 	),
-	description="My basic model!!!",
+	description="Underwater NeRF model",
 )

@@ -18,3 +18,11 @@ https://opg.optica.org/oe/fulltext.cfm?uri=oe-30-14-24295&id=477113
 https://opg.optica.org/oe/fulltext.cfm?uri=oe-30-16-29099&id=481504
 
 https://opg.optica.org/oe/fulltext.cfm?uri=oe-30-10-17290&id=472583
+
+
+TODO List:
+
+- Add to loss function 
+- find way to automate finding backscatter values 
+- Add robustness to transient features 
+- Change to mipNerf for better results 
