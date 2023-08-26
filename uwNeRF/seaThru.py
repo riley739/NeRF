@@ -8,14 +8,68 @@ import scipy.optimize
 import scipy.stats
 import math
 from PIL import Image
-import rawpy
 import matplotlib
 from matplotlib import pyplot as plt
 from skimage import exposure
 from skimage.restoration import denoise_bilateral, denoise_tv_chambolle, estimate_sigma
 from skimage.morphology import closing, opening, erosion, dilation, disk, diamond, square
-
+import cv2 
 matplotlib.use('TkAgg')
+
+
+def run_pipeline(img, depths, points, bg_light):
+    
+    points_r = img[np.array(points)[:, 0], np.array(points)[:, 1],0]
+    points_g = img[np.array(points)[:, 0], np.array(points)[:, 1],1]
+    points_b = img[np.array(points)[:, 0], np.array(points)[:, 1],2]
+    depths = depths.reshape(depths.shape[0],depths.shape[1])
+    B_depths = depths[np.array(points)[:, 0], np.array(points)[:, 1]]
+
+    Br = bg_light[0]
+    Bg = bg_light[1]
+    Bb = bg_light[2]
+    
+    ptsR, ptsG, ptsB = find_backscatter_estimation_points(img, depths, fraction=0.01)
+    
+    #print('Finding backscatter coefficients...', flush=True)
+    # Br, coefsR = find_backscatter_values(points_r, B_depths, depths, Br, restarts=25)
+    # Bg, coefsG = find_backscatter_values(points_g, B_depths, depths, Bg, restarts=25)
+    # Bb, coefsB = find_backscatter_values(points_b, B_depths, depths, Bb, restarts=25)
+    Br, coefsR = find_backscatter_values(ptsR, depths, restarts=25)
+    Bg, coefsG = find_backscatter_values(ptsG, depths, restarts=25)
+    Bb, coefsB = find_backscatter_values(ptsB, depths, restarts=25)
+    beta_B = [coefsR[1],coefsG[1],coefsB[1]]
+    # #print('Coefficients: \n{}\n{}\n{}'.format(coefsR, coefsG, coefsB), flush=True)
+    #print('Constructing neighborhood map...', flush=True)
+    nmap, _ = construct_neighborhood_map(depths, 0.1)
+
+    #print('Refining neighborhood map...', flush=True)
+    nmap, n = refine_neighborhood_map(nmap, 50)
+
+    #print('Estimating illumination...', flush=True)
+    illR = estimate_illumination(img[:, :, 0], Br, nmap, n, max_iters=100, tol=1E-5)
+    illG = estimate_illumination(img[:, :, 1], Bg, nmap, n, max_iters=100, tol=1E-5)
+    illB = estimate_illumination(img[:, :, 2], Bb, nmap, n, max_iters=100, tol=1E-5)
+    ill = np.stack([illR, illG, illB], axis=2)
+
+   
+    #print('Estimating wideband attenuation...', flush=True)
+    beta_D_r, _ = estimate_wideband_attentuation(depths, illR)
+    refined_beta_D_r, coefsR = refine_wideband_attentuation(depths, illR, beta_D_r)
+    beta_D_g, _ = estimate_wideband_attentuation(depths, illG)
+    refined_beta_D_g, coefsG = refine_wideband_attentuation(depths, illG, beta_D_g)
+    beta_D_b, _ = estimate_wideband_attentuation(depths, illB)
+    refined_beta_D_b, coefsB = refine_wideband_attentuation(depths, illB, beta_D_b)
+    
+    #print('Reconstructing image...', flush=True)
+    B = np.stack([Br, Bg, Bb], axis=2)
+    beta_D = np.stack([refined_beta_D_r, refined_beta_D_g, refined_beta_D_b], axis=2)
+    recovered = recover_image(img, depths, B, beta_D)
+    recovered = recovered*255
+    cv2.imwrite("sea-thrurecovered.png",cv2.cvtColor(recovered.astype('uint8'),cv2.COLOR_RGB2BGR))
+    
+    
+    return beta_B, beta_D
 
 '''
 Finds points for which to estimate backscatter
@@ -42,10 +96,7 @@ def find_backscatter_estimation_points(img, depths, num_bins=10, fraction=0.01, 
         points_b.extend([(z, p[2]) for n, p, z in points])
     return np.array(points_r), np.array(points_g), np.array(points_b)
 
-'''
-Estimates coefficients for the backscatter curve
-based on the backscatter point values and their depths
-'''
+
 def find_backscatter_values(B_pts, depths, restarts=10, max_mean_loss_fraction=0.1):
     B_vals, B_depths = B_pts[:, 1], B_pts[:, 0]
     z_max, z_min = np.max(depths), np.min(depths)
@@ -80,6 +131,50 @@ def find_backscatter_values(B_pts, depths, restarts=10, max_mean_loss_fraction=0
         slope, intercept, r_value, p_value, std_err = sp.stats.linregress(B_depths, B_vals)
         BD = (slope * depths) + intercept
         return BD, np.array([slope, intercept])
+    return estimate(depths, *coefs), coefs
+
+'''
+Estimates coefficients for the backscatter curve
+based on the backscatter point values and their depths
+'''
+def find_backscatter_values_new(B_pts, B_depths, depths, B_light,  restarts=10, max_mean_loss_fraction=0.1):
+    B_vals = B_pts
+    z_max, z_min = np.max(depths), np.min(depths)
+    max_mean_loss = max_mean_loss_fraction * (z_max - z_min)
+    coefs = None
+    best_loss = np.inf
+    
+    def estimate(depths, beta_B, J_prime, beta_D_prime):
+        val = (B_light * (1 - np.exp(-1 * beta_B * depths))) + (J_prime * np.exp(-1 * beta_D_prime * depths))
+        return val
+    def loss( beta_B, J_prime, beta_D_prime):
+        val = np.mean(np.abs(B_vals - estimate(B_depths, beta_B, J_prime, beta_D_prime)))
+        return val
+    
+    bounds_lower = [0,0,0]
+    bounds_upper = [5,1,5]
+    for _ in range(restarts):
+        try:
+            optp, pcov = sp.optimize.curve_fit(
+                f=estimate,
+                xdata=B_depths,
+                ydata=B_vals,
+                p0=np.random.random(3) * bounds_upper,
+                bounds=(bounds_lower, bounds_upper),
+            )
+            l = loss(*optp)
+            if l < best_loss:
+                best_loss = l
+                coefs = optp
+        except RuntimeError as re:
+            pass
+            #print(re, file=sys.stderr)
+    if best_loss > max_mean_loss:
+        #print('Warning: could not find accurate reconstruction. Switching to linear model.', flush=True)
+        slope, intercept, r_value, p_value, std_err = sp.stats.linregress(B_depths, B_vals)
+        BD = (slope * depths) + intercept
+        return BD, np.array([slope, intercept])
+    
     return estimate(depths, *coefs), coefs
 
 '''
@@ -122,7 +217,7 @@ def calculate_beta_D(depths, a, b, c, d):
     return (a * np.exp(b * depths)) + (c * np.exp(d * depths))
 
 
-def filter_data(X, Y, radius_fraction=0.01):
+def filter_data(X, Y, radius_fraction=0.1):
     idxs = np.argsort(X)
     X_s = X[idxs]
     Y_s = Y[idxs]
@@ -148,6 +243,7 @@ def filter_data(X, Y, radius_fraction=0.01):
             tempY.append(Y_s[i])
     return np.array(dX), np.array(dY)
 
+
 '''
 Estimate coefficients for the 2-term exponential
 describing the wideband attenuation
@@ -166,7 +262,9 @@ def refine_wideband_attentuation(depths, illum, estimation, restarts=10, min_dep
         return res
     def loss(a, b, c, d):
         return np.mean(np.abs(depths[locs] - calculate_reconstructed_depths(depths[locs], illum[locs], a, b, c, d)))
+    
     dX, dY = filter_data(depths[locs], estimation[locs], radius_fraction)
+    
     for _ in range(restarts):
         try:
             optp, pcov = sp.optimize.curve_fit(
@@ -180,18 +278,22 @@ def refine_wideband_attentuation(depths, illum, estimation, restarts=10, min_dep
                 best_loss = L
                 coefs = optp
         except RuntimeError as re:
-            print(re, file=sys.stderr)
+            slope, intercept, r_value, p_value, std_err = sp.stats.linregress(depths[locs], estimation[locs])
+            BD = (slope * depths + intercept)
+            return l * BD, np.array([slope, intercept])
+            pass
+            #print(re, file=sys.stderr)
     # Uncomment to see the regression
     # plt.clf()
     # plt.scatter(depths[locs], estimation[locs])
     # plt.plot(np.sort(depths[locs]), calculate_beta_D(np.sort(depths[locs]), *coefs))
     # plt.show()
     if best_loss > max_mean_loss:
-        print('Warning: could not find accurate reconstruction. Switching to linear model.', flush=True)
+        #print('Warning: could not find accurate reconstruction. Switching to linear model.', flush=True)
         slope, intercept, r_value, p_value, std_err = sp.stats.linregress(depths[locs], estimation[locs])
         BD = (slope * depths + intercept)
         return l * BD, np.array([slope, intercept])
-    print(f'Found best loss {best_loss}', flush=True)
+    #print(f'Found best loss {best_loss}', flush=True)
     BD = l * calculate_beta_D(depths, *coefs)
     return BD, coefs
 
@@ -261,7 +363,7 @@ def construct_neighborhood_map(depths, epsilon=0.05):
 Finds the closest nonzero label to a location
 '''
 def find_closest_label(nmap, start_x, start_y):
-    mask = np.zeros_like(nmap).astype(np.bool)
+    mask = np.zeros_like(nmap).astype(bool)
     q = collections.deque()
     q.append((start_x, start_y))
     while not len(q) == 0:
@@ -303,7 +405,10 @@ def refine_neighborhood_map(nmap, min_size = 10, radius = 3):
     for label, size in neighborhood_sizes:
         if size < min_size and label != 0:
             for x, y in zip(*np.where(nmap == label)):
-                refined_nmap[x, y] = find_closest_label(refined_nmap, x, y)
+                try:
+                    refined_nmap[x, y] = find_closest_label(refined_nmap, x, y)
+                except:
+                    pass
     refined_nmap = closing(refined_nmap, square(radius))
     return refined_nmap, num_labels - 1
 
@@ -382,44 +487,3 @@ def wbalance_no_red_gw(img):
 
 def scale(img):
     return (img - np.min(img)) / (np.max(img) - np.min(img))
-
-def run_pipeline(img, depths, args):
-    print('Estimating backscatter...', flush=True)
-    ptsR, ptsG, ptsB = find_backscatter_estimation_points(img, depths, fraction=0.01, min_depth_percent=args.min_depth)
-
-    print('Finding backscatter coefficients...', flush=True)
-    Br, coefsR = find_backscatter_values(ptsR, depths, restarts=25)
-    Bg, coefsG = find_backscatter_values(ptsG, depths, restarts=25)
-    Bb, coefsB = find_backscatter_values(ptsB, depths, restarts=25)
-    
-    print('Coefficients: \n{}\n{}\n{}'.format(coefsR, coefsG, coefsB), flush=True)
-
-    # print('Constructing neighborhood map...', flush=True)
-    # nmap, _ = construct_neighborhood_map(depths, 0.1)
-
-    # print('Refining neighborhood map...', flush=True)
-    # nmap, n = refine_neighborhood_map(nmap, 50)
-
-    # print('Estimating illumination...', flush=True)
-    # illR = estimate_illumination(img[:, :, 0], Br, nmap, n, p=args.p, max_iters=100, tol=1E-5, f=args.f)
-    # illG = estimate_illumination(img[:, :, 1], Bg, nmap, n, p=args.p, max_iters=100, tol=1E-5, f=args.f)
-    # illB = estimate_illumination(img[:, :, 2], Bb, nmap, n, p=args.p, max_iters=100, tol=1E-5, f=args.f)
-    # ill = np.stack([illR, illG, illB], axis=2)
-    R = img[:, :, 0]
-    G = img[:, :, 1]
-    B = img[:, :, 2]
-    # print(illR- img[:, :, 0])
-    print('Estimating wideband attenuation...', flush=True)
-    beta_D_r, _ = estimate_wideband_attentuation(depths, R)
-    refined_beta_D_r, coefsR = refine_wideband_attentuation(depths, R, beta_D_r, radius_fraction=args.spread_data_fraction, l=args.l)
-    beta_D_g, _ = estimate_wideband_attentuation(depths, G)
-    refined_beta_D_g, coefsG = refine_wideband_attentuation(depths, G, beta_D_g, radius_fraction=args.spread_data_fraction, l=args.l)
-    beta_D_b, _ = estimate_wideband_attentuation(depths, B)
-    refined_beta_D_b, coefsB = refine_wideband_attentuation(depths, B, beta_D_b, radius_fraction=args.spread_data_fraction, l=args.l)
-
-    print('Reconstructing image...', flush=True)
-    B = np.stack([Br, Bg, Bb], axis=2)
-    beta_D = np.stack([refined_beta_D_r, refined_beta_D_g, refined_beta_D_b], axis=2)
-    recovered = recover_image(img, depths, B, beta_D)
-
-    return recovered

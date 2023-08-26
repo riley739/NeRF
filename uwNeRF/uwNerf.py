@@ -53,9 +53,9 @@ class uwNerfModel(NerfactoModel):
         accumulation = self.renderer_accumulation(weights=weights)
 
         if image is not None:
-            hazy = light_model(rgb,depth,image["image"])
+            hazy = light_model_seaThru(rgb,depth,image["image"])
         else:
-            hazy = light_model(rgb,depth,None)
+            hazy = light_model_seaThru(rgb,depth,None)
 
         
         outputs = {
