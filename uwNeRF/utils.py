@@ -173,10 +173,12 @@ def light_model_seaThru(images, depths, og_imgs, A = None, B = None):
         beta_d = DEFAULT_B
         return None
     else:
-        #print("Calculating")
+        print("Calculating")
 
         og_img =  og_imgs.cpu().detach().numpy()
+        #TODO remove this
         og_img = np.reshape(og_img,(depthMap.size,3))
+        
         ind  = find_furthest_points(depthMap)
         points = og_img[ind]
 
@@ -187,8 +189,11 @@ def light_model_seaThru(images, depths, og_imgs, A = None, B = None):
         
 
         points = output_img[np.array(output_ind)[:, 0], np.array(output_ind)[:, 1],:]
-
-        beta_b, beta_d = run_pipeline(output_img, output_depth, output_ind, bg_light = [V_R,V_G,V_B])
+        
+        og_img = og_img.reshape((30,30,3))
+        depthMap = depthMap.reshape((30,30))
+        
+        beta_b, beta_d = run_pipeline(og_img, depthMap, ind, bg_light = [V_R,V_G,V_B])
 
         # # print("ERROR occured")
         # og_img =  og_imgs.cpu().detach().numpy()
@@ -285,7 +290,6 @@ def light_model_seaThru(images, depths, og_imgs, A = None, B = None):
     # hazy1 = hazy1.cpu().detach().numpy()
     
     # cv2.imwrite("hazy255.png",cv2.cvtColor(hazy1, cv2.COLOR_RGB2BGR)*255)
-    exit()
     return hazy
 
 

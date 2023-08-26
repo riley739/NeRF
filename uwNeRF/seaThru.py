@@ -18,17 +18,22 @@ matplotlib.use('TkAgg')
 
 
 def run_pipeline(img, depths, points, bg_light):
-    
-    points_r = img[np.array(points)[:, 0], np.array(points)[:, 1],0]
-    points_g = img[np.array(points)[:, 0], np.array(points)[:, 1],1]
-    points_b = img[np.array(points)[:, 0], np.array(points)[:, 1],2]
-    depths = depths.reshape(depths.shape[0],depths.shape[1])
-    B_depths = depths[np.array(points)[:, 0], np.array(points)[:, 1]]
+    recovered = img*255
+    cv2.imwrite("sea-test.png",cv2.cvtColor(recovered.astype('uint8'),cv2.COLOR_RGB2BGR))
+    np.save("depths",depths)
+    depths = depths.reshape(30,30)
+    # points_r = img[np.array(points)[:, 0], np.array(points)[:, 1],0]
+    # points_g = img[np.array(points)[:, 0], np.array(points)[:, 1],1]
+    # points_b = img[np.array(points)[:, 0], np.array(points)[:, 1],2]
+    # depths = depths.reshape(depths.shape[0],depths.shape[1])
+    # B_depths = depths[np.array(points)[:, 0], np.array(points)[:, 1]]
 
-    Br = bg_light[0]
-    Bg = bg_light[1]
-    Bb = bg_light[2]
+    # Br = bg_light[0]
+    # Bg = bg_light[1]
+    # Bb = bg_light[2]
     
+    print(img.shape)
+    print(depths.shape)
     ptsR, ptsG, ptsB = find_backscatter_estimation_points(img, depths, fraction=0.01)
     
     #print('Finding backscatter coefficients...', flush=True)
@@ -38,8 +43,11 @@ def run_pipeline(img, depths, points, bg_light):
     Br, coefsR = find_backscatter_values(ptsR, depths, restarts=25)
     Bg, coefsG = find_backscatter_values(ptsG, depths, restarts=25)
     Bb, coefsB = find_backscatter_values(ptsB, depths, restarts=25)
-    beta_B = [coefsR[1],coefsG[1],coefsB[1]]
-    # #print('Coefficients: \n{}\n{}\n{}'.format(coefsR, coefsG, coefsB), flush=True)
+    
+    
+    
+    # beta_B = [coefsR[1],coefsG[1],coefsB[1]]
+    print('Coefficients: \n{}\n{}\n{}'.format(coefsR, coefsG, coefsB), flush=True)
     #print('Constructing neighborhood map...', flush=True)
     nmap, _ = construct_neighborhood_map(depths, 0.1)
 
@@ -64,12 +72,12 @@ def run_pipeline(img, depths, points, bg_light):
     #print('Reconstructing image...', flush=True)
     B = np.stack([Br, Bg, Bb], axis=2)
     beta_D = np.stack([refined_beta_D_r, refined_beta_D_g, refined_beta_D_b], axis=2)
-    recovered = recover_image(img, depths, B, beta_D)
+    recovered = recover_image(img, depths, B, beta_D, nmap)
     recovered = recovered*255
     cv2.imwrite("sea-thrurecovered.png",cv2.cvtColor(recovered.astype('uint8'),cv2.COLOR_RGB2BGR))
     
     
-    return beta_B, beta_D
+    return [1,2,3], beta_D
 
 '''
 Finds points for which to estimate backscatter
@@ -99,6 +107,7 @@ def find_backscatter_estimation_points(img, depths, num_bins=10, fraction=0.01, 
 
 def find_backscatter_values(B_pts, depths, restarts=10, max_mean_loss_fraction=0.1):
     B_vals, B_depths = B_pts[:, 1], B_pts[:, 0]
+    print(B_pts)
     z_max, z_min = np.max(depths), np.min(depths)
     max_mean_loss = max_mean_loss_fraction * (z_max - z_min)
     coefs = None
@@ -217,7 +226,7 @@ def calculate_beta_D(depths, a, b, c, d):
     return (a * np.exp(b * depths)) + (c * np.exp(d * depths))
 
 
-def filter_data(X, Y, radius_fraction=0.1):
+def filter_data(X, Y, radius_fraction=0.01):
     idxs = np.argsort(X)
     X_s = X[idxs]
     Y_s = Y[idxs]
@@ -248,7 +257,7 @@ def filter_data(X, Y, radius_fraction=0.1):
 Estimate coefficients for the 2-term exponential
 describing the wideband attenuation
 '''
-def refine_wideband_attentuation(depths, illum, estimation, restarts=10, min_depth_fraction = 0.1, max_mean_loss_fraction=np.inf, l=1.0, radius_fraction=0.01):
+def refine_wideband_attentuation(depths, illum, estimation, restarts=10, min_depth_fraction = 0.1, max_mean_loss_fraction=np.inf, l=0.5, radius_fraction=0.05):
     eps = 1E-8
     z_max, z_min = np.max(depths), np.min(depths)
     min_depth = z_min + (min_depth_fraction * (z_max - z_min))
@@ -301,10 +310,12 @@ def refine_wideband_attentuation(depths, illum, estimation, restarts=10, min_dep
 Reconstruct the scene and globally white balance
 based the Gray World Hypothesis
 '''
-def recover_image(img, depths, B, beta_D):
+def recover_image(img, depths, B, beta_D, nmap):
     res = (img - B) * np.exp(beta_D * np.expand_dims(depths, axis=2))
     res = np.maximum(0.0, np.minimum(1.0, res))
+    res[nmap == 0] = 0
     res = scale(wbalance_no_red_10p(res))
+    res[nmap == 0] = img[nmap == 0]
     return res
 
 
@@ -413,13 +424,12 @@ def refine_neighborhood_map(nmap, min_size = 10, radius = 3):
     return refined_nmap, num_labels - 1
 
 
-def load_image_and_depth_map(img_fname, size_limit = 1024):
-    # img = Image.fromarray(rawpy.imread(img_fname).postprocess(k))
-    img = Image.open(img_fname)
+def load_image_and_depth_map(img_fname, depths_fname, size_limit = 1024):
+    depths = Image.open(depths_fname)
+    img = Image.fromarray(rawpy.imread(img_fname).postprocess())
     img.thumbnail((size_limit, size_limit), Image.ANTIALIAS)
-    depths = np.random.rand(img.size[0]*img.size[1],1)
-    output = np.float32(img).reshape((img.size[0]*img.size[1],3))
-    return output / 255.0, depths
+    depths = depths.resize(img.size, Image.ANTIALIAS)
+    return np.float32(img) / 255.0, np.array(depths)
 
 '''
 White balance with 'grey world' hypothesis

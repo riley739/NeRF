@@ -32,7 +32,7 @@ uwNerf = MethodSpecification(
 	            dataparser=NerfstudioDataParserConfig(),
 	            train_num_rays_per_batch=900,
                 eval_num_rays_per_batch=900 ,
-                patch_size = 3,
+                patch_size = 30,
                 camera_optimizer=CameraOptimizerConfig(
 					mode="SO3xR3",
 					optimizer=RAdamOptimizerConfig(lr=6e-4, eps=1e-8, weight_decay=1e-3),
